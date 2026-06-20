@@ -51,8 +51,8 @@ export interface PileDetail {
 export interface DailyRecord {
   date: string;
   rigId: string;
+  section: string;
   completedCount: number;
-  totalMeters: number;
   dailyMeters: number;
   abnormalReason: string | null;
   downtimeHours: number;
@@ -81,6 +81,14 @@ export interface Risk {
   description: string;
   status: RiskStatus;
   createdAt: string;
+  resolution?: RiskResolution;
+}
+
+export interface RiskResolution {
+  opinion: string;
+  assignee: string;
+  dueDate: string;
+  resolvedAt?: string;
 }
 
 export interface FilterState {
@@ -98,6 +106,12 @@ export interface DailyStats {
   cumulativeMeters: number;
   avgRigProductivity: number;
   abnormalCount: number;
+}
+
+export interface PlanItem {
+  date: string;
+  section: string;
+  plannedCount: number;
 }
 
 export const PileStatusText: Record<PileStatus, string> = {
@@ -124,4 +138,10 @@ export const RigStatusText: Record<Rig['status'], string> = {
   running: '运行中',
   idle: '闲置',
   maintenance: '维护中'
+};
+
+export const RiskStatusText: Record<RiskStatus, string> = {
+  [RiskStatus.PENDING]: '待处理',
+  [RiskStatus.PROCESSING]: '处理中',
+  [RiskStatus.RESOLVED]: '已解决'
 };

@@ -1,10 +1,27 @@
 import { create } from 'zustand';
 import { piles } from '@/data/piles';
-import { dailyRecords } from '@/data/dailyRecords';
-import { risks } from '@/data/risks';
+import { dailyRecords, planItems } from '@/data/dailyRecords';
+import { risks as initialRisks } from '@/data/risks';
 import { rigs, crews } from '@/data/rigs';
-import type { Pile, DailyRecord, Risk, Rig, Crew, FilterState, PileStatus, RiskType } from '@/types';
-import { RiskLevel } from '@/types';
+import type { Pile, DailyRecord, Risk, Rig, Crew, FilterState, PileStatus, RiskType, RiskResolution } from '@/types';
+import { RiskLevel, RiskStatus } from '@/types';
+
+interface SectionHeatmapItem {
+  building: string;
+  total: number;
+  completed: number;
+  inProgress: number;
+  riskCount: number;
+  completionRate: number;
+}
+
+interface PlanComparisonItem {
+  section: string;
+  planned: number;
+  actual: number;
+  deviation: number;
+  completionRate: number;
+}
 
 interface AppState {
   piles: Pile[];
@@ -26,6 +43,7 @@ interface AppState {
   setRiskFilter: (filter: RiskType | 'all') => void;
   setHighlightedPileId: (id: string | null) => void;
   setDailySectionFilter: (section: string) => void;
+  updateRiskResolution: (riskId: string, resolution: RiskResolution, newStatus: RiskStatus) => void;
   getFilteredPiles: () => Pile[];
   getFilteredRisks: () => Risk[];
   getDailyStats: (date: string, section?: string) => {
@@ -35,11 +53,13 @@ interface AppState {
     avgRigProductivity: number;
     abnormalCount: number;
   };
-  getTrendData: (days: number, section?: string) => { date: string; completed: number; dailyMeters: number; cumulativeMeters: number }[];
+  getTrendData: (days: number, section?: string, endDate?: string) => { date: string; fullDate: string; completed: number; dailyMeters: number; cumulativeMeters: number }[];
   getRigRanking: (date: string, section?: string) => { rig: Rig; completed: number; meters: number; downtime: number }[];
   getAbnormalReasons: (date: string, section?: string) => { reason: string; count: number }[];
+  getPlanComparison: (date: string, section?: string) => PlanComparisonItem[];
+  getSectionHeatmap: (section: string) => SectionHeatmapItem[];
   hasRisk: (pileId: string) => boolean;
-  getRigsInSection: (section: string) => string[];
+  getRisksForPile: (pileId: string) => Risk[];
 }
 
 const initialFilters: FilterState = {
@@ -53,7 +73,7 @@ const initialFilters: FilterState = {
 export const useAppStore = create<AppState>((set, get) => ({
   piles,
   dailyRecords,
-  risks,
+  risks: initialRisks,
   rigs,
   crews,
   filters: initialFilters,
@@ -70,19 +90,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     })),
 
   setSelectedPile: (pile) => set({ selectedPile: pile }),
-
   setShowPileDetail: (show) => set({ showPileDetail: show }),
-
   setSelectedDate: (date) => set({ selectedDate: date }),
-
   setRiskFilter: (filter) => set({ riskFilter: filter }),
-
   setHighlightedPileId: (id) => set({ highlightedPileId: id }),
-
   setDailySectionFilter: (section) => set({ dailySectionFilter: section }),
 
+  updateRiskResolution: (riskId, resolution, newStatus) =>
+    set((state) => ({
+      risks: state.risks.map((r) =>
+        r.id === riskId ? { ...r, resolution, status: newStatus } : r
+      )
+    })),
+
   getFilteredPiles: () => {
-    const { piles, filters, highlightedPileId } = get();
+    const { piles, filters } = get();
     return piles.filter((pile) => {
       if (filters.building !== 'all' && pile.building !== filters.building) return false;
       if (filters.section !== 'all' && pile.section !== filters.section) return false;
@@ -99,30 +121,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     return risks.filter((r) => r.type === riskFilter);
   },
 
-  getRigsInSection: (section) => {
-    const { piles } = get();
-    const rigIdSet = new Set<string>();
-    piles.forEach((p) => {
-      if (p.section === section && p.rigId) {
-        rigIdSet.add(p.rigId);
-      }
-    });
-    return Array.from(rigIdSet);
-  },
-
   getDailyStats: (date, section) => {
-    const { dailyRecords, rigs, piles } = get();
-    const sectionRigIds = section && section !== 'all'
-      ? (() => {
-          const s = new Set<string>();
-          piles.forEach((p) => { if (p.section === section && p.rigId) s.add(p.rigId); });
-          return s;
-        })()
-      : null;
-
+    const { dailyRecords, rigs } = get();
     const dayRecords = dailyRecords.filter((r) => {
       if (r.date !== date) return false;
-      if (sectionRigIds && !sectionRigIds.has(r.rigId)) return false;
+      if (section && section !== 'all' && r.section !== section) return false;
       return true;
     });
 
@@ -131,14 +134,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const allRecordsBefore = dailyRecords.filter((r) => {
       if (r.date > date) return false;
-      if (sectionRigIds && !sectionRigIds.has(r.rigId)) return false;
+      if (section && section !== 'all' && r.section !== section) return false;
       return true;
     });
     const cumulativeMeters = allRecordsBefore.reduce((sum, r) => sum + r.dailyMeters, 0);
 
-    const activeRigCount = sectionRigIds
-      ? rigs.filter((r) => sectionRigIds.has(r.id) && r.status === 'running').length
-      : rigs.filter((r) => r.status === 'running').length;
+    const activeRigIds = new Set(dayRecords.filter((r) => r.completedCount > 0).map((r) => r.rigId));
+    const activeRigCount = activeRigIds.size || rigs.filter((r) => r.status === 'running').length;
     const avgRigProductivity = activeRigCount > 0 ? totalCompleted / activeRigCount : 0;
     const abnormalCount = dayRecords.filter((r) => r.abnormalReason !== null).length;
 
@@ -151,30 +153,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
   },
 
-  getTrendData: (days, section) => {
-    const { dailyRecords, piles } = get();
-    const sectionRigIds = section && section !== 'all'
-      ? (() => {
-          const s = new Set<string>();
-          piles.forEach((p) => { if (p.section === section && p.rigId) s.add(p.rigId); });
-          return s;
-        })()
-      : null;
+  getTrendData: (days, section, endDate) => {
+    const { dailyRecords } = get();
+    const end = endDate || new Date().toISOString().split('T')[0];
 
     const dates: string[] = [];
-    const today = new Date();
+    const endDateObj = new Date(end);
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today);
+      const d = new Date(endDateObj);
       d.setDate(d.getDate() - i);
       dates.push(d.toISOString().split('T')[0]);
     }
 
     let runningCumulative = 0;
-
     const earliestDate = dates[0];
     const recordsBefore = dailyRecords.filter((r) => {
       if (r.date >= earliestDate) return false;
-      if (sectionRigIds && !sectionRigIds.has(r.rigId)) return false;
+      if (section && section !== 'all' && r.section !== section) return false;
       return true;
     });
     runningCumulative = recordsBefore.reduce((sum, r) => sum + r.dailyMeters, 0);
@@ -182,7 +177,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     return dates.map((date) => {
       const dayRecords = dailyRecords.filter((r) => {
         if (r.date !== date) return false;
-        if (sectionRigIds && !sectionRigIds.has(r.rigId)) return false;
+        if (section && section !== 'all' && r.section !== section) return false;
         return true;
       });
 
@@ -192,6 +187,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       return {
         date: date.slice(5),
+        fullDate: date,
         completed,
         dailyMeters: Math.round(dm * 10) / 10,
         cumulativeMeters: Math.round(runningCumulative * 10) / 10
@@ -200,48 +196,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getRigRanking: (date, section) => {
-    const { dailyRecords, rigs, piles } = get();
-    const sectionRigIds = section && section !== 'all'
-      ? (() => {
-          const s = new Set<string>();
-          piles.forEach((p) => { if (p.section === section && p.rigId) s.add(p.rigId); });
-          return s;
-        })()
-      : null;
+    const { dailyRecords, rigs } = get();
+    const dayRecords = dailyRecords.filter((r) => {
+      if (r.date !== date) return false;
+      if (section && section !== 'all' && r.section !== section) return false;
+      return true;
+    });
 
-    const dayRecords = dailyRecords.filter((r) => r.date === date);
+    const rigData = new Map<string, { completed: number; meters: number; downtime: number }>();
+    dayRecords.forEach((r) => {
+      const existing = rigData.get(r.rigId) || { completed: 0, meters: 0, downtime: 0 };
+      existing.completed += r.completedCount;
+      existing.meters += r.dailyMeters;
+      existing.downtime += r.downtimeHours;
+      rigData.set(r.rigId, existing);
+    });
 
-    const targetRigs = sectionRigIds
-      ? rigs.filter((r) => sectionRigIds.has(r.id))
-      : rigs;
-
-    return targetRigs
+    return rigs
+      .filter((rig) => !section || section === 'all' || rigData.has(rig.id))
       .map((rig) => {
-        const record = dayRecords.find((r) => r.rigId === rig.id);
-        return {
-          rig,
-          completed: record?.completedCount || 0,
-          meters: record?.dailyMeters || 0,
-          downtime: record?.downtimeHours || 0
-        };
+        const data = rigData.get(rig.id) || { completed: 0, meters: 0, downtime: 0 };
+        return { rig, ...data };
       })
       .sort((a, b) => b.completed - a.completed || b.meters - a.meters);
   },
 
   getAbnormalReasons: (date, section) => {
-    const { dailyRecords, piles } = get();
-    const sectionRigIds = section && section !== 'all'
-      ? (() => {
-          const s = new Set<string>();
-          piles.forEach((p) => { if (p.section === section && p.rigId) s.add(p.rigId); });
-          return s;
-        })()
-      : null;
-
+    const { dailyRecords } = get();
     const records = dailyRecords.filter((r) => {
       if (r.date > date || r.date < getDateBefore(date, 7)) return false;
       if (!r.abnormalReason) return false;
-      if (sectionRigIds && !sectionRigIds.has(r.rigId)) return false;
+      if (section && section !== 'all' && r.section !== section) return false;
       return true;
     });
 
@@ -257,9 +242,50 @@ export const useAppStore = create<AppState>((set, get) => ({
       .sort((a, b) => b.count - a.count);
   },
 
+  getPlanComparison: (date, section) => {
+    const { dailyRecords } = get();
+    const sections = section && section !== 'all' ? [section] : ['A区', 'B区', 'C区', 'D区'];
+
+    return sections.map((sec) => {
+      const plan = planItems.find((p) => p.date === date && p.section === sec);
+      const actualRecords = dailyRecords.filter((r) => r.date === date && r.section === sec);
+      const actual = actualRecords.reduce((sum, r) => sum + r.completedCount, 0);
+      const planned = plan?.plannedCount || 0;
+      const deviation = actual - planned;
+      const completionRate = planned > 0 ? Math.round((actual / planned) * 100) : 0;
+
+      return { section: sec, planned, actual, deviation, completionRate };
+    });
+  },
+
+  getSectionHeatmap: (section) => {
+    const { piles, risks } = get();
+    const buildings = ['1#楼', '2#楼', '3#楼'];
+
+    return buildings.map((building) => {
+      const sectionPiles = piles.filter((p) => p.building === building && p.section === section);
+      const total = sectionPiles.length;
+      const completed = sectionPiles.filter((p) => p.status === 'completed').length;
+      const inProgress = sectionPiles.filter(
+        (p) => p.status === 'drilling' || p.status === 'pending_pour'
+      ).length;
+      const riskCount = risks.filter(
+        (r) => r.pileId.startsWith(building) && r.status !== RiskStatus.RESOLVED
+      ).length;
+      const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return { building, total, completed, inProgress, riskCount, completionRate };
+    });
+  },
+
   hasRisk: (pileId) => {
     const { risks } = get();
     return risks.some((r) => r.pileId === pileId);
+  },
+
+  getRisksForPile: (pileId) => {
+    const { risks } = get();
+    return risks.filter((r) => r.pileId === pileId);
   }
 }));
 

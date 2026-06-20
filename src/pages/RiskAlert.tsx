@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Filter, AlertOctagon, Clock, FileX } from 'lucide-react';
 import RiskCard from '@/components/RiskCard/RiskCard';
 import { useAppStore } from '@/store/useAppStore';
-import { RiskType, RiskTypeText, RiskLevel } from '@/types';
+import { RiskType, RiskTypeText, RiskLevel, RiskStatus } from '@/types';
 import { cn } from '@/lib/utils';
 
 const riskTabs = [
@@ -17,7 +17,8 @@ export default function RiskAlert() {
   const navigate = useNavigate();
   const {
     riskFilter, setRiskFilter, getFilteredRisks, setFilters,
-    setSelectedPile, setShowPileDetail, piles, setHighlightedPileId
+    setSelectedPile, setShowPileDetail, piles, setHighlightedPileId,
+    updateRiskResolution
   } = useAppStore();
 
   const filteredRisks = getFilteredRisks();
@@ -157,7 +158,7 @@ export default function RiskAlert() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pinnedRisks.map((risk) => (
-              <RiskCard key={risk.id} risk={risk} onLocate={handleLocate} isPinned />
+              <RiskCard key={risk.id} risk={risk} onLocate={handleLocate} isPinned onResolve={updateRiskResolution} />
             ))}
           </div>
         </div>
@@ -173,7 +174,7 @@ export default function RiskAlert() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {normalRisks.map((risk) => (
-              <RiskCard key={risk.id} risk={risk} onLocate={handleLocate} />
+              <RiskCard key={risk.id} risk={risk} onLocate={handleLocate} onResolve={updateRiskResolution} />
             ))}
           </div>
         </div>

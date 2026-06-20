@@ -20,6 +20,8 @@ const riskDescriptions: Record<RiskType, string[]> = {
   ]
 };
 
+const assignees = ['张建国', '李明华', '王志强', '赵德胜'];
+
 function generateRisks(): Risk[] {
   const risks: Risk[] = [];
   const riskTypes = [RiskType.NO_UPDATE, RiskType.POUR_INTERVAL, RiskType.NO_TEST_RESULT];
@@ -35,7 +37,23 @@ function generateRisks(): Risk[] {
   selectedPiles.forEach((pile, index) => {
     const type = riskTypes[index % 3];
     const level = index < 4 ? RiskLevel.HIGH : index < 8 ? RiskLevel.MEDIUM : RiskLevel.LOW;
-    const status = index < 2 ? RiskStatus.PROCESSING : RiskStatus.PENDING;
+    const status = index < 1 ? RiskStatus.RESOLVED : index < 3 ? RiskStatus.PROCESSING : RiskStatus.PENDING;
+
+    let resolution;
+    if (status === RiskStatus.PROCESSING) {
+      resolution = {
+        opinion: ['已联系班组跟进', '安排专人核查', '已通知检测机构'][Math.floor(Math.random() * 3)],
+        assignee: assignees[Math.floor(Math.random() * assignees.length)],
+        dueDate: new Date(Date.now() + (1 + Math.floor(Math.random() * 3)) * 86400000).toISOString().split('T')[0]
+      };
+    } else if (status === RiskStatus.RESOLVED) {
+      resolution = {
+        opinion: '已现场确认并更新数据',
+        assignee: assignees[0],
+        dueDate: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+        resolvedAt: new Date(Date.now() - 43200000).toISOString()
+      };
+    }
 
     risks.push({
       id: `RISK-${String(index + 1).padStart(4, '0')}`,
@@ -45,7 +63,8 @@ function generateRisks(): Risk[] {
       durationHours: Math.floor(Math.random() * 72) + 12,
       description: riskDescriptions[type][Math.floor(Math.random() * riskDescriptions[type].length)],
       status,
-      createdAt: new Date(Date.now() - Math.floor(Math.random() * 72) * 3600000).toISOString()
+      createdAt: new Date(Date.now() - Math.floor(Math.random() * 72) * 3600000).toISOString(),
+      resolution
     });
   });
 

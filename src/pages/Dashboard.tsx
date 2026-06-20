@@ -4,6 +4,7 @@ import { Layers, Drill, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import FilterBar from '@/components/FilterBar/FilterBar';
 import PileGrid from '@/components/PileGrid/PileGrid';
 import PileDetailModal from '@/components/PileDetail/PileDetailModal';
+import SectionHeatmap from '@/components/SectionHeatmap/SectionHeatmap';
 import StatCard from '@/components/StatCard/StatCard';
 import { useAppStore } from '@/store/useAppStore';
 import { PileStatus, PileStatusText } from '@/types';
@@ -127,6 +128,8 @@ export default function Dashboard() {
       </div>
 
       <FilterBar />
+
+      <SectionHeatmap />
 
       <PileGrid />
 

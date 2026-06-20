@@ -1,7 +1,7 @@
-import { X, Clock, Ruler, Box, Users, User, MapPin, Drill } from 'lucide-react';
+import { X, Clock, Ruler, Box, Users, User, MapPin, Drill, CheckCircle2, UserCheck, FileText } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { formatDateTime, formatDuration } from '@/utils/dateUtils';
-import { PileStatusText, RigStatusText } from '@/types';
+import { PileStatusText, RigStatusText, RiskStatus } from '@/types';
 import { statusColors, riskLevelColors } from '@/utils/statusColors';
 import { cn } from '@/lib/utils';
 
@@ -220,20 +220,56 @@ export default function PileDetailModal() {
           {pileRisks.length > 0 && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <h3 className="text-sm font-semibold text-red-400 mb-3">风险提示</h3>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {pileRisks.map((risk) => (
-                  <div key={risk.id} className="flex items-start gap-3">
-                    <div
-                      className={cn(
-                        'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
-                        riskLevelColors[risk.level].bg
-                      )}
-                    />
-                    <div>
-                      <p className="text-sm text-white">{risk.description}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        已持续 {formatDuration(risk.durationHours)}
-                      </p>
+                  <div key={risk.id} className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/50">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={cn(
+                          'w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
+                          riskLevelColors[risk.level].bg
+                        )}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm text-white">{risk.description}</p>
+                          <span className={cn(
+                            'text-xs px-1.5 py-0.5 rounded flex-shrink-0',
+                            risk.status === RiskStatus.RESOLVED
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : risk.status === RiskStatus.PROCESSING
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : 'bg-slate-700 text-slate-400'
+                          )}>
+                            {risk.status === RiskStatus.RESOLVED ? '已解决' : risk.status === RiskStatus.PROCESSING ? '处理中' : '待处理'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          已持续 {formatDuration(risk.durationHours)}
+                        </p>
+                        {risk.resolution && (
+                          <div className="mt-2 pt-2 border-t border-slate-700/50 space-y-1">
+                            <div className="flex items-center gap-2 text-xs">
+                              <FileText className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                              <span className="text-slate-400">处理意见: <span className="text-slate-200">{risk.resolution.opinion}</span></span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <UserCheck className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                              <span className="text-slate-400">负责人: <span className="text-slate-200">{risk.resolution.assignee}</span></span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <Clock className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                              <span className="text-slate-400">预计完成: <span className="text-slate-200">{risk.resolution.dueDate}</span></span>
+                            </div>
+                            {risk.resolution.resolvedAt && (
+                              <div className="flex items-center gap-2 text-xs">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                                <span className="text-emerald-400">已闭环: {formatDateTime(risk.resolution.resolvedAt).split(' ')[0]}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
