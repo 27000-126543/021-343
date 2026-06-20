@@ -1,0 +1,135 @@
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Layers, Drill, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import FilterBar from '@/components/FilterBar/FilterBar';
+import PileGrid from '@/components/PileGrid/PileGrid';
+import PileDetailModal from '@/components/PileDetail/PileDetailModal';
+import StatCard from '@/components/StatCard/StatCard';
+import { useAppStore } from '@/store/useAppStore';
+import { PileStatus } from '@/types';
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const { piles, risks, getDailyStats, selectedDate } = useAppStore();
+
+  const stats = useMemo(() => {
+    const statusCounts = {
+      [PileStatus.NOT_STARTED]: 0,
+      [PileStatus.DRILLING]: 0,
+      [PileStatus.PENDING_POUR]: 0,
+      [PileStatus.COMPLETED]: 0,
+      [PileStatus.PENDING_TEST]: 0
+    };
+
+    piles.forEach((pile) => {
+      statusCounts[pile.status]++;
+    });
+
+    const dailyStats = getDailyStats(selectedDate);
+    const completionRate = piles.length > 0
+      ? Math.round((statusCounts[PileStatus.COMPLETED] / piles.length) * 100)
+      : 0;
+
+    return {
+      ...statusCounts,
+      total: piles.length,
+      completionRate,
+      highRisks: risks.filter((r) => r.level === 'high').length,
+      dailyStats
+    };
+  }, [piles, risks, getDailyStats, selectedDate]);
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">进度看板</h1>
+          <p className="text-sm text-slate-400 mt-1">实时查看各楼栋桩位施工状态</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="总桩数"
+          value={stats.total}
+          unit="根"
+          icon={Layers}
+          color="blue"
+        />
+        <StatCard
+          title="已完成"
+          value={stats.completed}
+          unit={`根 · ${stats.completionRate}%`}
+          icon={CheckCircle2}
+          color="green"
+          trend={5.2}
+          trendLabel="较昨日"
+        />
+        <StatCard
+          title="施工中"
+          value={stats.drilling + stats.pending_pour}
+          unit="根"
+          icon={Drill}
+          color="amber"
+        />
+        <StatCard
+          title="待处理风险"
+          value={stats.highRisks}
+          unit="项"
+          icon={AlertTriangle}
+          color="red"
+          onClick={() => navigate('/risks')}
+        />
+      </div>
+
+      <div className="grid grid-cols-5 gap-3">
+        {Object.entries(PileStatus).map(([key, value]) => {
+          const count = stats[value];
+          const percentage = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+          const colors: Record<string, { bg: string; text: string; dot: string }> = {
+            not_started: { bg: 'bg-gray-500/10', text: 'text-gray-400', dot: 'bg-gray-500' },
+            drilling: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-500' },
+            pending_pour: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-500' },
+            completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-500' },
+            pending_test: { bg: 'bg-violet-500/10', text: 'text-violet-400', dot: 'bg-violet-500' }
+          };
+          const labels: Record<string, string> = {
+            not_started: '未开工',
+            drilling: '成孔中',
+            pending_pour: '待灌注',
+            completed: '已完成',
+            pending_test: '待检测'
+          };
+          const c = colors[value];
+
+          return (
+            <div
+              key={key}
+              className={`${c.bg} border border-current/20 rounded-xl p-4 transition-transform hover:scale-105`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`w-2 h-2 rounded-full ${c.dot}`} />
+                <span className={`text-xs ${c.text}`}>{labels[value]}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={`text-2xl font-bold ${c.text}`}
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  {count}
+                </span>
+                <span className="text-xs text-slate-500">{percentage}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <FilterBar />
+
+      <PileGrid />
+
+      <PileDetailModal />
+    </div>
+  );
+}
