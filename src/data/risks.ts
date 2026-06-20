@@ -1,20 +1,6 @@
 import type { Risk } from '@/types';
 import { RiskType, RiskLevel, RiskStatus } from '@/types';
-
-const pileIdsWithRisks = [
-  '1#楼-A3-012',
-  '1#楼-C5-034',
-  '2#楼-B2-101',
-  '2#楼-E7-128',
-  '3#楼-D4-215',
-  '3#楼-F6-256',
-  '1#楼-G8-067',
-  '2#楼-A1-089',
-  '3#楼-C3-203',
-  '1#楼-E2-045',
-  '2#楼-H5-167',
-  '3#楼-B7-278'
-];
+import { piles } from '@/data/piles';
 
 const riskDescriptions: Record<RiskType, string[]> = {
   [RiskType.NO_UPDATE]: [
@@ -38,14 +24,22 @@ function generateRisks(): Risk[] {
   const risks: Risk[] = [];
   const riskTypes = [RiskType.NO_UPDATE, RiskType.POUR_INTERVAL, RiskType.NO_TEST_RESULT];
 
-  pileIdsWithRisks.forEach((pileId, index) => {
+  const activePiles = piles.filter(
+    (p) => p.status !== 'not_started' && p.rigId
+  );
+
+  const riskPileCount = Math.min(12, activePiles.length);
+  const shuffled = [...activePiles].sort(() => Math.random() - 0.5);
+  const selectedPiles = shuffled.slice(0, riskPileCount);
+
+  selectedPiles.forEach((pile, index) => {
     const type = riskTypes[index % 3];
     const level = index < 4 ? RiskLevel.HIGH : index < 8 ? RiskLevel.MEDIUM : RiskLevel.LOW;
     const status = index < 2 ? RiskStatus.PROCESSING : RiskStatus.PENDING;
 
     risks.push({
       id: `RISK-${String(index + 1).padStart(4, '0')}`,
-      pileId,
+      pileId: pile.id,
       type,
       level,
       durationHours: Math.floor(Math.random() * 72) + 12,

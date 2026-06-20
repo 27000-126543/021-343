@@ -30,8 +30,8 @@ export interface Pile {
   axis: string;
   section: string;
   status: PileStatus;
-  positionX: number;
-  positionY: number;
+  row: number;
+  col: number;
   rigId: string | null;
   crewId: string | null;
   detail: PileDetail | null;
@@ -94,7 +94,8 @@ export interface FilterState {
 export interface DailyStats {
   date: string;
   totalCompleted: number;
-  totalMeters: number;
+  dailyMeters: number;
+  cumulativeMeters: number;
   avgRigProductivity: number;
   abnormalCount: number;
 }

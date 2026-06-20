@@ -1,20 +1,26 @@
 import { useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Calendar, Gauge, ArrowUpDown, AlertCircle, BarChart3, PieChart } from 'lucide-react';
+import { Calendar, Gauge, ArrowUpDown, AlertCircle, BarChart3, PieChart, MapPin } from 'lucide-react';
 import StatCard from '@/components/StatCard/StatCard';
 import { useAppStore } from '@/store/useAppStore';
 import { getTodayString } from '@/utils/dateUtils';
 import { RigStatusText } from '@/types';
 import { cn } from '@/lib/utils';
 
+const sectionOptions = ['all', 'A区', 'B区', 'C区', 'D区'];
+
 export default function DailyReport() {
-  const { selectedDate, setSelectedDate, getDailyStats, getTrendData, getRigRanking, getAbnormalReasons, rigs, filters, setFilters } = useAppStore();
+  const {
+    selectedDate, setSelectedDate, getDailyStats, getTrendData, getRigRanking,
+    getAbnormalReasons, rigs, filters, setFilters, dailySectionFilter, setDailySectionFilter
+  } = useAppStore();
   const [trendDays, setTrendDays] = useState<7 | 30>(7);
 
-  const dailyStats = getDailyStats(selectedDate);
-  const trendData = getTrendData(trendDays);
-  const rigRanking = getRigRanking(selectedDate);
-  const abnormalReasons = getAbnormalReasons(selectedDate);
+  const section = dailySectionFilter;
+  const dailyStats = getDailyStats(selectedDate, section);
+  const trendData = getTrendData(trendDays, section);
+  const rigRanking = getRigRanking(selectedDate, section);
+  const abnormalReasons = getAbnormalReasons(selectedDate, section);
 
   const filteredRanking = useMemo(() => {
     if (filters.rigId === 'all') return rigRanking;
@@ -29,7 +35,7 @@ export default function DailyReport() {
       textStyle: { color: '#e2e8f0' }
     },
     legend: {
-      data: ['完成根数', '累计延米'],
+      data: ['完成根数', '当日延米', '累计延米'],
       textStyle: { color: '#94a3b8' },
       top: 0
     },
@@ -70,14 +76,34 @@ export default function DailyReport() {
         itemStyle: { color: '#3B82F6', borderRadius: [4, 4, 0, 0] }
       },
       {
+        name: '当日延米',
+        type: 'line',
+        yAxisIndex: 1,
+        data: trendData.map((d) => d.dailyMeters),
+        itemStyle: { color: '#F59E0B' },
+        lineStyle: { width: 2 },
+        symbol: 'circle',
+        symbolSize: 6
+      },
+      {
         name: '累计延米',
         type: 'line',
         yAxisIndex: 1,
-        data: trendData.map((d) => d.meters),
+        data: trendData.map((d) => d.cumulativeMeters),
         itemStyle: { color: '#10B981' },
         lineStyle: { width: 3 },
         symbol: 'circle',
-        symbolSize: 8
+        symbolSize: 8,
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(16, 185, 129, 0.25)' },
+              { offset: 1, color: 'rgba(16, 185, 129, 0.02)' }
+            ]
+          }
+        }
       }
     ]
   };
@@ -132,12 +158,12 @@ export default function DailyReport() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">日报汇总</h1>
           <p className="text-sm text-slate-400 mt-1">每日产能统计与机组分析</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-400" />
             <select
@@ -148,6 +174,20 @@ export default function DailyReport() {
               {dateOptions.map((d) => (
                 <option key={d} value={d}>
                   {d === today ? '今日' : d}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-slate-400" />
+            <select
+              value={dailySectionFilter}
+              onChange={(e) => setDailySectionFilter(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              {sectionOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s === 'all' ? '全部区段' : s}
                 </option>
               ))}
             </select>
@@ -167,7 +207,7 @@ export default function DailyReport() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           title="当日完成"
           value={dailyStats.totalCompleted}
@@ -179,18 +219,25 @@ export default function DailyReport() {
         />
         <StatCard
           title="当日延米"
-          value={dailyStats.totalMeters}
+          value={dailyStats.dailyMeters}
           unit="m"
           icon={Gauge}
-          color="green"
+          color="amber"
           trend={8.3}
           trendLabel="较昨日"
+        />
+        <StatCard
+          title="累计延米"
+          value={dailyStats.cumulativeMeters}
+          unit="m"
+          icon={ArrowUpDown}
+          color="green"
         />
         <StatCard
           title="机组平均产能"
           value={dailyStats.avgRigProductivity}
           unit="根/台"
-          icon={ArrowUpDown}
+          icon={BarChart3}
           color="violet"
         />
         <StatCard
@@ -210,6 +257,7 @@ export default function DailyReport() {
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-400" />
               <h2 className="text-lg font-semibold text-white">产能趋势</h2>
+              {section !== 'all' && <span className="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">{section}</span>}
             </div>
             <div className="flex bg-slate-800 rounded-lg p-1">
               <button
@@ -255,6 +303,7 @@ export default function DailyReport() {
         <div className="flex items-center gap-2 mb-4">
           <Gauge className="w-5 h-5 text-emerald-400" />
           <h2 className="text-lg font-semibold text-white">机组产能排名</h2>
+          {section !== 'all' && <span className="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">{section}</span>}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">

@@ -15,7 +15,10 @@ const riskTabs = [
 
 export default function RiskAlert() {
   const navigate = useNavigate();
-  const { riskFilter, setRiskFilter, getFilteredRisks, setFilters, setSelectedPile, setShowPileDetail, piles } = useAppStore();
+  const {
+    riskFilter, setRiskFilter, getFilteredRisks, setFilters,
+    setSelectedPile, setShowPileDetail, piles, setHighlightedPileId
+  } = useAppStore();
 
   const filteredRisks = getFilteredRisks();
 
@@ -47,13 +50,14 @@ export default function RiskAlert() {
     if (pile) {
       setFilters({
         building: pile.building,
-        section: pile.section,
+        section: 'all',
         status: 'all',
         axis: '',
         rigId: 'all'
       });
       setSelectedPile(pile);
       setShowPileDetail(true);
+      setHighlightedPileId(pile.id);
       navigate('/');
     }
   };

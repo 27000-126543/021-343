@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Drill, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import FilterBar from '@/components/FilterBar/FilterBar';
@@ -6,14 +6,21 @@ import PileGrid from '@/components/PileGrid/PileGrid';
 import PileDetailModal from '@/components/PileDetail/PileDetailModal';
 import StatCard from '@/components/StatCard/StatCard';
 import { useAppStore } from '@/store/useAppStore';
-import { PileStatus } from '@/types';
+import { PileStatus, PileStatusText } from '@/types';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { piles, risks, getDailyStats, selectedDate } = useAppStore();
+  const { piles, risks, getDailyStats, selectedDate, highlightedPileId, setHighlightedPileId } = useAppStore();
+
+  useEffect(() => {
+    if (highlightedPileId) {
+      const timer = setTimeout(() => setHighlightedPileId(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedPileId, setHighlightedPileId]);
 
   const stats = useMemo(() => {
-    const statusCounts = {
+    const statusCounts: Record<PileStatus, number> = {
       [PileStatus.NOT_STARTED]: 0,
       [PileStatus.DRILLING]: 0,
       [PileStatus.PENDING_POUR]: 0,
@@ -31,13 +38,21 @@ export default function Dashboard() {
       : 0;
 
     return {
-      ...statusCounts,
+      statusCounts,
       total: piles.length,
       completionRate,
       highRisks: risks.filter((r) => r.level === 'high').length,
       dailyStats
     };
   }, [piles, risks, getDailyStats, selectedDate]);
+
+  const statusColorMap: Record<PileStatus, { bg: string; text: string; dot: string }> = {
+    [PileStatus.NOT_STARTED]: { bg: 'bg-gray-500/10', text: 'text-gray-400', dot: 'bg-gray-500' },
+    [PileStatus.DRILLING]: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-500' },
+    [PileStatus.PENDING_POUR]: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-500' },
+    [PileStatus.COMPLETED]: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-500' },
+    [PileStatus.PENDING_TEST]: { bg: 'bg-violet-500/10', text: 'text-violet-400', dot: 'bg-violet-500' }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -58,7 +73,7 @@ export default function Dashboard() {
         />
         <StatCard
           title="已完成"
-          value={stats.completed}
+          value={stats.statusCounts[PileStatus.COMPLETED]}
           unit={`根 · ${stats.completionRate}%`}
           icon={CheckCircle2}
           color="green"
@@ -67,7 +82,7 @@ export default function Dashboard() {
         />
         <StatCard
           title="施工中"
-          value={stats.drilling + stats.pending_pour}
+          value={stats.statusCounts[PileStatus.DRILLING] + stats.statusCounts[PileStatus.PENDING_POUR]}
           unit="根"
           icon={Drill}
           color="amber"
@@ -83,33 +98,19 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-5 gap-3">
-        {Object.entries(PileStatus).map(([key, value]) => {
-          const count = stats[value];
+        {(Object.keys(PileStatusText) as PileStatus[]).map((status) => {
+          const count = stats.statusCounts[status];
           const percentage = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
-          const colors: Record<string, { bg: string; text: string; dot: string }> = {
-            not_started: { bg: 'bg-gray-500/10', text: 'text-gray-400', dot: 'bg-gray-500' },
-            drilling: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-500' },
-            pending_pour: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-500' },
-            completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-500' },
-            pending_test: { bg: 'bg-violet-500/10', text: 'text-violet-400', dot: 'bg-violet-500' }
-          };
-          const labels: Record<string, string> = {
-            not_started: '未开工',
-            drilling: '成孔中',
-            pending_pour: '待灌注',
-            completed: '已完成',
-            pending_test: '待检测'
-          };
-          const c = colors[value];
+          const c = statusColorMap[status];
 
           return (
             <div
-              key={key}
+              key={status}
               className={`${c.bg} border border-current/20 rounded-xl p-4 transition-transform hover:scale-105`}
             >
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-2 h-2 rounded-full ${c.dot}`} />
-                <span className={`text-xs ${c.text}`}>{labels[value]}</span>
+                <span className={`text-xs ${c.text}`}>{PileStatusText[status]}</span>
               </div>
               <div className="flex items-baseline gap-2">
                 <span
