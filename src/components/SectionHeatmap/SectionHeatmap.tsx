@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Flame, Building2, Wrench, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Flame, Building2, Wrench, AlertTriangle, CheckCircle2, ChevronDown, X } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { cn } from '@/lib/utils';
 
@@ -19,17 +19,46 @@ function getRateTextColor(rate: number): string {
   return 'text-red-400';
 }
 
-export default function SectionHeatmap() {
+interface SectionHeatmapProps {
+  onBuildingClick?: (building: string, section: string) => void;
+  activeBuilding?: string | null;
+  activeDrillSection?: string | null;
+  onClearDrill?: () => void;
+}
+
+export default function SectionHeatmap({
+  onBuildingClick,
+  activeBuilding,
+  activeDrillSection,
+  onClearDrill
+}: SectionHeatmapProps) {
   const { getSectionHeatmap } = useAppStore();
   const [activeSection, setActiveSection] = useState<string>('A区');
 
   const heatmapData = getSectionHeatmap(activeSection);
+  const isDrilled = activeBuilding && activeDrillSection;
 
   return (
     <div className="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-xl p-6">
-      <div className="flex items-center gap-2 mb-5">
-        <Flame className="w-5 h-5 text-orange-400" />
-        <h2 className="text-lg font-semibold text-white">区段进度热力图</h2>
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <Flame className="w-5 h-5 text-orange-400" />
+          <h2 className="text-lg font-semibold text-white">区段进度热力图</h2>
+          {isDrilled && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/20 text-blue-300 text-xs rounded-full">
+              已下钻: {activeBuilding} · {activeDrillSection}
+            </span>
+          )}
+        </div>
+        {isDrilled && onClearDrill && (
+          <button
+            onClick={onClearDrill}
+            className="flex items-center gap-1 px-3 py-1 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <X className="w-3 h-3" />
+            清除下钻
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 mb-5">
@@ -59,57 +88,66 @@ export default function SectionHeatmap() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {heatmapData.map((item) => (
-          <div
-            key={item.building}
-            className={cn(
-              'bg-gradient-to-br rounded-xl p-4 border transition-all hover:scale-[1.02]',
-              getHeatColor(item.completionRate)
-            )}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-slate-300" />
-                <span className="text-sm font-semibold text-white">{item.building}</span>
+        {heatmapData.map((item) => {
+          const isActive = activeBuilding === item.building && activeDrillSection === activeSection;
+          return (
+            <div
+              key={item.building}
+              onClick={() => onBuildingClick?.(item.building, activeSection)}
+              className={cn(
+                'bg-gradient-to-br rounded-xl p-4 border transition-all',
+                getHeatColor(item.completionRate),
+                onBuildingClick && 'cursor-pointer hover:scale-[1.02] hover:shadow-lg',
+                isActive && 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-900 scale-[1.02]'
+              )}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-slate-300" />
+                  <span className="text-sm font-semibold text-white">{item.building}</span>
+                </div>
+                <span className={cn('text-2xl font-bold font-mono', getRateTextColor(item.completionRate))} style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  {item.completionRate}%
+                </span>
               </div>
-              <span className={cn('text-2xl font-bold font-mono', getRateTextColor(item.completionRate))} style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                {item.completionRate}%
-              </span>
-            </div>
 
-            <div className="w-full bg-slate-700/50 rounded-full h-2 mb-3">
-              <div
-                className={cn(
-                  'h-2 rounded-full transition-all',
-                  item.completionRate >= 80 ? 'bg-emerald-500' : item.completionRate >= 60 ? 'bg-amber-500' : item.completionRate >= 40 ? 'bg-orange-500' : 'bg-red-500'
+              <div className="w-full bg-slate-700/50 rounded-full h-2 mb-3">
+                <div
+                  className={cn(
+                    'h-2 rounded-full transition-all',
+                    item.completionRate >= 80 ? 'bg-emerald-500' : item.completionRate >= 60 ? 'bg-amber-500' : item.completionRate >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                  )}
+                  style={{ width: `${Math.min(item.completionRate, 100)}%` }}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-slate-800/60 rounded-lg p-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mx-auto mb-1" />
+                  <div className="text-xs text-slate-400">已完成</div>
+                  <div className="text-sm font-bold text-white font-mono" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.completed}</div>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg p-2">
+                  <Wrench className="w-3.5 h-3.5 text-amber-400 mx-auto mb-1" />
+                  <div className="text-xs text-slate-400">施工中</div>
+                  <div className="text-sm font-bold text-white font-mono" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.inProgress}</div>
+                </div>
+                <div className="bg-slate-800/60 rounded-lg p-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-400 mx-auto mb-1" />
+                  <div className="text-xs text-slate-400">风险</div>
+                  <div className={cn('text-sm font-bold font-mono', item.riskCount > 0 ? 'text-red-400' : 'text-slate-500')} style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.riskCount}</div>
+                </div>
+              </div>
+
+              <div className="mt-2 text-xs text-slate-500 text-center">
+                共 {item.total} 根
+                {onBuildingClick && (
+                  <span className="text-blue-400 ml-1">点击下钻 →</span>
                 )}
-                style={{ width: `${Math.min(item.completionRate, 100)}%` }}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-slate-800/60 rounded-lg p-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mx-auto mb-1" />
-                <div className="text-xs text-slate-400">已完成</div>
-                <div className="text-sm font-bold text-white font-mono" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.completed}</div>
-              </div>
-              <div className="bg-slate-800/60 rounded-lg p-2">
-                <Wrench className="w-3.5 h-3.5 text-amber-400 mx-auto mb-1" />
-                <div className="text-xs text-slate-400">施工中</div>
-                <div className="text-sm font-bold text-white font-mono" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.inProgress}</div>
-              </div>
-              <div className="bg-slate-800/60 rounded-lg p-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-red-400 mx-auto mb-1" />
-                <div className="text-xs text-slate-400">风险</div>
-                <div className={cn('text-sm font-bold font-mono', item.riskCount > 0 ? 'text-red-400' : 'text-slate-500')} style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.riskCount}</div>
               </div>
             </div>
-
-            <div className="mt-2 text-xs text-slate-500 text-center">
-              共 {item.total} 根
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

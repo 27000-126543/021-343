@@ -1,16 +1,24 @@
 import { useMemo, useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { getPileStatusBgClass } from '@/utils/statusColors';
-import { PileStatusText } from '@/types';
+import { PileStatusText, PileStatus, RiskStatus } from '@/types';
 import type { Pile } from '@/types';
-import { ZoomIn, ZoomOut } from 'lucide-react';
+import { ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function PileGrid() {
-  const { getFilteredPiles, setSelectedPile, setShowPileDetail, hasRisk, filters, highlightedPileId } = useAppStore();
+interface PileGridProps {
+  highlightMode?: 'normal' | 'active';
+}
+
+export default function PileGrid({ highlightMode = 'normal' }: PileGridProps) {
+  const { getFilteredPiles, setSelectedPile, setShowPileDetail, risks, filters, highlightedPileId } = useAppStore();
   const [zoom, setZoom] = useState(1);
 
   const filteredPiles = getFilteredPiles();
+
+  const hasRisk = (pileId: string) => {
+    return risks.some((r) => r.pileId === pileId && r.status !== RiskStatus.RESOLVED);
+  };
 
   const buildingGroups = useMemo(() => {
     const groups = new Map<string, Pile[]>();
@@ -29,6 +37,8 @@ export default function PileGrid() {
 
   const cellSize = 36 * zoom;
 
+  const isHighlightActive = highlightMode === 'active';
+
   const renderBuildingGrid = (building: string, piles: Pile[]) => {
     const sectionGroups = new Map<string, Pile[]>();
     piles.forEach((p) => {
@@ -44,6 +54,12 @@ export default function PileGrid() {
         <div className="flex items-center gap-3 mb-3">
           <h3 className="text-base font-semibold text-white">{building}</h3>
           <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{piles.length} 根</span>
+          {isHighlightActive && (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
+              <Sparkles className="w-3 h-3" />
+              重点突出模式
+            </span>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -80,7 +96,10 @@ export default function PileGrid() {
                         return (
                           <div
                             key={`${rowIdx}-${colIdx}`}
-                            className="rounded-md bg-slate-800/30"
+                            className={cn(
+                              'rounded-md',
+                              isHighlightActive ? 'bg-slate-800/10' : 'bg-slate-800/30'
+                            )}
                             style={{ width: cellSize, height: cellSize }}
                           />
                         );
@@ -89,6 +108,16 @@ export default function PileGrid() {
                       const hasPileRisk = hasRisk(pile.id);
                       const isHighlighted = highlightedPileId === pile.id;
                       const bgClass = getPileStatusBgClass(pile.status, hasPileRisk);
+
+                      const isActive =
+                        isHighlightActive &&
+                        (pile.status === PileStatus.DRILLING ||
+                          pile.status === PileStatus.PENDING_POUR ||
+                          hasPileRisk);
+
+                      const isDimmed =
+                        isHighlightActive &&
+                        !isActive;
 
                       return (
                         <button
@@ -99,14 +128,16 @@ export default function PileGrid() {
                             'rounded-md flex items-center justify-center text-white font-medium transition-all duration-200 hover:scale-110 hover:shadow-lg hover:z-10 cursor-pointer border-2',
                             isHighlighted
                               ? 'border-yellow-400 ring-2 ring-yellow-400/60 z-20 scale-110 shadow-lg shadow-yellow-400/30'
-                              : 'border-white/10'
+                              : 'border-white/10',
+                            isActive && 'ring-2 ring-amber-400/50 scale-105 z-10 shadow-md',
+                            isDimmed && 'opacity-30 grayscale hover:opacity-60 hover:grayscale-0'
                           )}
                           style={{
                             width: cellSize,
                             height: cellSize,
                             fontSize: `${Math.max(8, 10 * zoom)}px`
                           }}
-                          title={`${pile.id} - ${PileStatusText[pile.status]}`}
+                          title={`${pile.id} - ${PileStatusText[pile.status]}${hasPileRisk ? ' · 有风险' : ''}`}
                         >
                           <span className="truncate px-0.5">{pile.axis}</span>
                         </button>
@@ -132,6 +163,9 @@ export default function PileGrid() {
             {filters.building !== 'all' && ` · ${filters.building}`}
             {filters.section !== 'all' && ` · ${filters.section}`}
             {filters.status !== 'all' && ` · ${PileStatusText[filters.status]}`}
+            {isHighlightActive && (
+              <span className="ml-2 text-amber-400">· 突出显示: 施工中 + 未闭环风险</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -172,6 +206,12 @@ export default function PileGrid() {
           <div className="w-3 h-3 rounded bg-blue-500 border-2 border-yellow-400" />
           <span className="text-xs text-slate-400">定位高亮</span>
         </div>
+        {isHighlightActive && (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-amber-500 ring-2 ring-amber-400/50" />
+            <span className="text-xs text-slate-400">重点突出</span>
+          </div>
+        )}
       </div>
     </div>
   );

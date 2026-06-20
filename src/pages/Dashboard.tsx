@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Drill, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import FilterBar from '@/components/FilterBar/FilterBar';
@@ -7,11 +7,13 @@ import PileDetailModal from '@/components/PileDetail/PileDetailModal';
 import SectionHeatmap from '@/components/SectionHeatmap/SectionHeatmap';
 import StatCard from '@/components/StatCard/StatCard';
 import { useAppStore } from '@/store/useAppStore';
-import { PileStatus, PileStatusText } from '@/types';
+import { PileStatus, PileStatusText, RiskStatus } from '@/types';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { piles, risks, getDailyStats, selectedDate, highlightedPileId, setHighlightedPileId } = useAppStore();
+  const { piles, risks, getDailyStats, selectedDate, highlightedPileId, setHighlightedPileId, setFilters } = useAppStore();
+  const [drillBuilding, setDrillBuilding] = useState<string | null>(null);
+  const [drillSection, setDrillSection] = useState<string | null>(null);
 
   useEffect(() => {
     if (highlightedPileId) {
@@ -19,6 +21,18 @@ export default function Dashboard() {
       return () => clearTimeout(timer);
     }
   }, [highlightedPileId, setHighlightedPileId]);
+
+  const handleBuildingClick = (building: string, section: string) => {
+    setDrillBuilding(building);
+    setDrillSection(section);
+    setFilters({ building, section, status: 'all', axis: '', rigId: 'all' });
+  };
+
+  const handleClearDrill = () => {
+    setDrillBuilding(null);
+    setDrillSection(null);
+    setFilters({ building: 'all', section: 'all', status: 'all', axis: '', rigId: 'all' });
+  };
 
   const stats = useMemo(() => {
     const statusCounts: Record<PileStatus, number> = {
@@ -38,11 +52,14 @@ export default function Dashboard() {
       ? Math.round((statusCounts[PileStatus.COMPLETED] / piles.length) * 100)
       : 0;
 
+    const pendingRisks = risks.filter((r) => r.status !== RiskStatus.RESOLVED);
+
     return {
       statusCounts,
       total: piles.length,
       completionRate,
-      highRisks: risks.filter((r) => r.level === 'high').length,
+      highRisks: pendingRisks.filter((r) => r.level === 'high').length,
+      pendingRisks: pendingRisks.length,
       dailyStats
     };
   }, [piles, risks, getDailyStats, selectedDate]);
@@ -55,12 +72,19 @@ export default function Dashboard() {
     [PileStatus.PENDING_TEST]: { bg: 'bg-violet-500/10', text: 'text-violet-400', dot: 'bg-violet-500' }
   };
 
+  const isDrilled = drillBuilding && drillSection;
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">进度看板</h1>
-          <p className="text-sm text-slate-400 mt-1">实时查看各楼栋桩位施工状态</p>
+          <p className="text-sm text-slate-400 mt-1">
+            实时查看各楼栋桩位施工状态
+            {isDrilled && (
+              <span className="ml-2 text-blue-400">· 下钻: {drillBuilding} {drillSection}</span>
+            )}
+          </p>
         </div>
       </div>
 
@@ -129,9 +153,14 @@ export default function Dashboard() {
 
       <FilterBar />
 
-      <SectionHeatmap />
+      <SectionHeatmap
+        onBuildingClick={handleBuildingClick}
+        activeBuilding={drillBuilding}
+        activeDrillSection={drillSection}
+        onClearDrill={handleClearDrill}
+      />
 
-      <PileGrid />
+      <PileGrid highlightMode={isDrilled ? 'active' : 'normal'} />
 
       <PileDetailModal />
     </div>

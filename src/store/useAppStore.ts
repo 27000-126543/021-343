@@ -70,10 +70,39 @@ const initialFilters: FilterState = {
   rigId: 'all'
 };
 
+const STORAGE_KEY = 'pile-dashboard-risks';
+
+function loadRisksFromStorage(baseRisks: Risk[]): Risk[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return baseRisks;
+    const saved = JSON.parse(stored) as Risk[];
+    const savedMap = new Map(saved.map((r) => [r.id, r]));
+    return baseRisks.map((r) => {
+      const savedRisk = savedMap.get(r.id);
+      if (savedRisk && savedRisk.resolution) {
+        return { ...r, resolution: savedRisk.resolution, status: savedRisk.status };
+      }
+      return r;
+    });
+  } catch {
+    return baseRisks;
+  }
+}
+
+function saveRisksToStorage(risks: Risk[]) {
+  try {
+    const toSave = risks.filter((r) => r.resolution);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch {
+    // ignore
+  }
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   piles,
   dailyRecords,
-  risks: initialRisks,
+  risks: loadRisksFromStorage(initialRisks),
   rigs,
   crews,
   filters: initialFilters,
@@ -97,11 +126,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDailySectionFilter: (section) => set({ dailySectionFilter: section }),
 
   updateRiskResolution: (riskId, resolution, newStatus) =>
-    set((state) => ({
-      risks: state.risks.map((r) =>
+    set((state) => {
+      const updatedRisks = state.risks.map((r) =>
         r.id === riskId ? { ...r, resolution, status: newStatus } : r
-      )
-    })),
+      );
+      saveRisksToStorage(updatedRisks);
+      return { risks: updatedRisks };
+    }),
 
   getFilteredPiles: () => {
     const { piles, filters } = get();
@@ -264,13 +295,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     return buildings.map((building) => {
       const sectionPiles = piles.filter((p) => p.building === building && p.section === section);
+      const sectionPileIds = new Set(sectionPiles.map((p) => p.id));
       const total = sectionPiles.length;
       const completed = sectionPiles.filter((p) => p.status === 'completed').length;
       const inProgress = sectionPiles.filter(
         (p) => p.status === 'drilling' || p.status === 'pending_pour'
       ).length;
       const riskCount = risks.filter(
-        (r) => r.pileId.startsWith(building) && r.status !== RiskStatus.RESOLVED
+        (r) => sectionPileIds.has(r.pileId) && r.status !== RiskStatus.RESOLVED
       ).length;
       const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 

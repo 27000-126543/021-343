@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Calendar, Gauge, ArrowUpDown, AlertCircle, BarChart3, PieChart, MapPin, Target, TrendingUp, TrendingDown } from 'lucide-react';
+import { Calendar, Gauge, ArrowUpDown, AlertCircle, BarChart3, PieChart, MapPin, Target, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, Gauge as GaugeIcon, XCircle, CheckCircle2 } from 'lucide-react';
 import StatCard from '@/components/StatCard/StatCard';
 import { useAppStore } from '@/store/useAppStore';
 import { getTodayString } from '@/utils/dateUtils';
@@ -28,6 +28,22 @@ export default function DailyReport() {
     if (filters.rigId === 'all') return rigRanking;
     return rigRanking.filter((r) => r.rig.id === filters.rigId);
   }, [rigRanking, filters.rigId]);
+
+  const meetingConclusions = useMemo(() => {
+    const laggingSections = planComparison
+      .filter((p) => p.completionRate < 100)
+      .sort((a, b) => a.completionRate - b.completionRate)
+      .slice(0, 3);
+
+    const lowProductivityRigs = rigRanking
+      .filter((r) => r.completed > 0)
+      .sort((a, b) => a.completed - b.completed)
+      .slice(0, 2);
+
+    const topAbnormalReasons = abnormalReasons.slice(0, 3);
+
+    return { laggingSections, lowProductivityRigs, topAbnormalReasons };
+  }, [planComparison, rigRanking, abnormalReasons]);
 
   const trendOption = {
     tooltip: {
@@ -106,6 +122,103 @@ export default function DailyReport() {
         <StatCard title="累计延米" value={dailyStats.cumulativeMeters} unit="m" icon={ArrowUpDown} color="green" />
         <StatCard title="机组平均产能" value={dailyStats.avgRigProductivity} unit="根/台" icon={BarChart3} color="violet" />
         <StatCard title="异常记录" value={dailyStats.abnormalCount} unit="次" icon={AlertCircle} color="red" trend={-15} trendLabel="较上周" />
+      </div>
+
+      <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-red-500/10 border border-amber-500/20 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+            <Lightbulb className="w-4 h-4 text-amber-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">晨会结论</h2>
+            <p className="text-xs text-slate-400">基于 {selectedDate} 数据自动生成 · {section === 'all' ? '全部区段' : section}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-900/60 backdrop-blur rounded-lg p-4 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="w-4 h-4 text-red-400" />
+              <span className="text-sm font-medium text-slate-200">计划落后区段</span>
+            </div>
+            {meetingConclusions.laggingSections.length > 0 ? (
+              <div className="space-y-2">
+                {meetingConclusions.laggingSections.map((item, idx) => (
+                  <div key={item.section} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-400 font-mono w-5" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{idx + 1}</span>
+                      <span className="text-white">{item.section}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn('font-mono text-sm font-bold', item.completionRate >= 80 ? 'text-amber-400' : 'text-red-400')} style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                        {item.completionRate}%
+                      </span>
+                      <span className="text-xs text-red-400">
+                        {item.deviation > 0 ? '+' : ''}{item.deviation}根
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-emerald-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                所有区段均达标
+              </p>
+            )}
+          </div>
+
+          <div className="bg-slate-900/60 backdrop-blur rounded-lg p-4 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-3">
+              <GaugeIcon className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-medium text-slate-200">产能偏低钻机</span>
+            </div>
+            {meetingConclusions.lowProductivityRigs.length > 0 ? (
+              <div className="space-y-2">
+                {meetingConclusions.lowProductivityRigs.map((item, idx) => (
+                  <div key={item.rig.id} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-amber-400 font-mono w-5" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{idx + 1}</span>
+                      <span className="text-white font-mono" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{item.rig.id}</span>
+                    </div>
+                    <span className="text-slate-300 font-mono text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      {item.completed} 根 / {item.meters}m
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">暂无数据</p>
+            )}
+          </div>
+
+          <div className="bg-slate-900/60 backdrop-blur rounded-lg p-4 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <span className="text-sm font-medium text-slate-200">主要异常原因</span>
+            </div>
+            {meetingConclusions.topAbnormalReasons.length > 0 ? (
+              <div className="space-y-2">
+                {meetingConclusions.topAbnormalReasons.map((item, idx) => (
+                  <div key={item.reason} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono w-5" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{idx + 1}</span>
+                      <span className="text-slate-200">{item.reason}</span>
+                    </div>
+                    <span className="text-red-400 font-mono text-sm" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      {item.count} 次
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-emerald-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                近7天无异常
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-xl p-6">
